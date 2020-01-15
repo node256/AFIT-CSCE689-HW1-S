@@ -54,28 +54,28 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
         exit(1);
     }
 
-    // Set and verify socket file descriptor
-    if (this->_listSockFD = socket(p->ai_family, p->ai_socktype, p->ai_protocol) == 0){
-        perror("socket failed\n");
-        exit(EXIT_FAILURE);
-    }
+    for(p = ai; p != NULL; p = p->ai_next) {
+        this->_listSockFD = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (this->_listSockFD < 0) { 
+            continue;
+        }
         
-    // prevent "address already in use" error message
-    if (setsockopt(this->_listSockFD, SOL_SOCKET, SO_REUSEADDR, &optYes, sizeof(int)) != 0){
-        perror("socket opt failed\n");
-        exit(EXIT_FAILURE);       
+        // prevent "address already in use" error message
+        setsockopt(this->_listSockFD, SOL_SOCKET, SO_REUSEADDR, &optYes, sizeof(int));
+
+        // set listener port to non-blocking
+        // Beej says it might eat cpu cycles
+        fcntl(this->_listSockFD, F_SETFL, O_NONBLOCK);
+
+        if (bind(this->_listSockFD, p->ai_addr, p->ai_addrlen) < 0) {
+            close(this->_listSockFD);
+            continue;
+        }
+
+        break;
     }
 
-    // set socket to non-blocking, suppoesedly eats CPU cycles
-    // poll()/epoll() might make it unecessary according to Beej
-    if (fcntl(this->_listSockFD, F_SETFL, O_NONBLOCK) < 0){
-        printf("Set non-blocking failed\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // bind socket file descriptor to IP addr/port
-    if (bind(this->_listSockFD, p->ai_addr, p->ai_addrlen) < 0) {
-        close(this->_listSockFD);
+    if (p == NULL){
         perror("bind failed\n");
         exit(EXIT_FAILURE);
     }
@@ -83,47 +83,6 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
     // Clear addr info
     freeaddrinfo(ai);
 
-    /*struct sockaddr_in servAddr;
-    int opt = 1; 
-  
-    // socket create and verification 
-    this->this->_listSockFD = socket(AF_INET, SOCK_STREAM, 0); 
-    if (this->this->_listSockFD == -1) { 
-        printf("Socket creation failed...\n"); 
-        exit(0); 
-    } 
-    else printf("Socket successfully created..\n");
-    bzero(&servAddr, sizeof(servAddr));
-
-    // setting socket options
-    if (setsockopt(this->_listSockFD, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        printf("Socket options failed...\n"); 
-        exit(0); 
-    } 
-    else
-        printf("Socket options succeeded..\n");
-
-    // set socket to non-blocking, suppoesedly eats CPU cycles
-    if (fcntl(this->_listSockFD, F_SETFL, O_NONBLOCK)){
-        printf("Setting non-blocking failed\n");
-        exit(0);
-    }
-    else printf("Setting non-blocking succeeded");
-    
-    // setting IP address and port
-    servAddr.sin_family = AF_INET; 
-    servAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servAddr.sin_addr.s_addr = inet_addr(ip_addr); 
-    servAddr.sin_port = htons(port); 
-
-    // binding IP/port to socket
-    if ((bind(this->_listSockFD, (struct sockaddr*)&servAddr, sizeof(servAddr))) != 0) { 
-        printf("socket bind failed...\n"); 
-        exit(0); 
-    } 
-    else
-        printf("Socket successfully binded..\n");
-    */
 }
 
 /**********************************************************************************************
@@ -139,6 +98,7 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
 void TCPServer::listenSvr() {
 
     #define MAX_EVENTS 10
+    #define MAXBUF 256
 
     struct sockaddr_storage clientAddr;
     socklen_t addrLen;
@@ -146,12 +106,14 @@ void TCPServer::listenSvr() {
     struct epoll_event ev, events[MAX_EVENTS];
     int connSockFD, nfds, epollfd;
 
+    char buffer[MAXBUF];
+
     // start and verify listening on socket
     if (listen(this->_listSockFD, 10) < 0 ){
         perror("listen failed\n");
         exit(EXIT_FAILURE);
     }
-   
+
     // Set up epoll file desciptor
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
@@ -191,13 +153,14 @@ void TCPServer::listenSvr() {
                 }
                 ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connSockFD;
-                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD,
-                            &ev) == -1) {
-                    perror("epoll_ctl: connSockFD");
+                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD, &ev) == -1) {
+                    fprintf(stderr, "epoll set insertion error: fd=%d0", connSockFD);
                     exit(EXIT_FAILURE);
                 }
             } else {
-                //do_use_fd(events[n].data.fd);
+                memset(buffer,0,MAXBUF);
+                read(events[n].data.fd, buffer, MAXBUF);
+                write(events[n].data.fd, buffer, strlen(buffer));
             }
         }
     }
