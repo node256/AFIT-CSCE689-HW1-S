@@ -121,7 +121,7 @@ void TCPServer::listenSvr() {
         exit(EXIT_FAILURE);
     }
 
-    // Set up epoll control
+    // Set up epoll control and add listening socket
     ev.events = EPOLLIN;
     ev.data.fd = this->_listSockFD;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, this->_listSockFD, &ev) == -1) {
@@ -131,7 +131,7 @@ void TCPServer::listenSvr() {
 
     // accepting connections and processing commands
     for (;;){
-        // poll file descriptors
+        // poll file descriptors for ready sockets
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
             perror("epoll_wait");
@@ -140,6 +140,7 @@ void TCPServer::listenSvr() {
 
         // process events, accept connections, transfer data
         for (int n = 0; n < nfds; ++n) {
+            // accept new connections
             if (events[n].data.fd == this->_listSockFD) {
                 connSockFD = accept(this->_listSockFD, (struct sockaddr *) &clientAddr, &addrLen);
                 if (connSockFD == -1) {
@@ -151,12 +152,14 @@ void TCPServer::listenSvr() {
                     printf("Set conn non-blocking failed\n");
                     exit(EXIT_FAILURE);
                 }
+                // add new connection to poll list
                 ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connSockFD;
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD, &ev) == -1) {
                     fprintf(stderr, "epoll set insertion error: fd=%d0", connSockFD);
                     exit(EXIT_FAILURE);
                 }
+            // process commands, send/recive data
             } else {
                 memset(buffer,0,MAXBUF);
                 read(events[n].data.fd, buffer, MAXBUF);
@@ -164,6 +167,7 @@ void TCPServer::listenSvr() {
             }
         }
     }
+    close(epollfd);
 }
 
 /**********************************************************************************************
@@ -174,4 +178,5 @@ void TCPServer::listenSvr() {
 
 void TCPServer::shutdown() {
     close(this->_listSockFD);
+
 }

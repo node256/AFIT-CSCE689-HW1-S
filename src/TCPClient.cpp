@@ -1,3 +1,7 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sstream.h>
+#include <string.h>
 #include "TCPClient.h"
 
 
@@ -26,6 +30,40 @@ TCPClient::~TCPClient() {
  **********************************************************************************************/
 
 void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
+    
+    // convert port to const char* for getaddrinfo()
+    std::stringstream ss;
+    ss << port;
+    std::string convert = ss.str();
+    const char *PORT = convert.c_str();
+
+    int rv;
+    struct addrinfo hints, *res;
+
+    // set up socket address/port
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    // verify address/port
+    if ((rv = getaddrinfo(ip_addr, PORT, &hints, &res)) != 0){
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
+        exit(1);
+    }
+
+    // make and verfy socket
+    this->_clientSockFD = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sockfd == -1) { 
+        perror("socket creation failed\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+
+    // appempt to connect and verify
+    if (connect(this->_clientSockFD, res->ai_addr, res->ai_addrlen) < 0 ){
+        perror("connect failed\n");
+        closeConn();
+        exit(EXIT_FAILURE);
+    }
 
 }
 
@@ -48,6 +86,7 @@ void TCPClient::handleConnection() {
  **********************************************************************************************/
 
 void TCPClient::closeConn() {
+    close(this->_clientSockFD);
 }
 
 

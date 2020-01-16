@@ -20,7 +20,7 @@ public:
    virtual void closeConn();
 
 private:
-
+   int _clientSockFD;
 };
 
 
