@@ -28,9 +28,9 @@ TCPServer::~TCPServer() {
  *
  *    Throws: socket_error for recoverable errors, runtime_error for unrecoverable types
  **********************************************************************************************/
-// Geeks for Geeks: https://www.geeksforgeeks.org/socket-programming-cc/
-// Geeks for Geeks: https://www.geeksforgeeks.org/tcp-server-client-implementation-in-c/
-// Beej's Guide to Network Programming by Brian hall: https://beej.us/guide/bgnet/html/#poll
+// Akshat Shnha https://www.geeksforgeeks.org/socket-programming-cc/
+// Yogesh Shukla 1 https://www.geeksforgeeks.org/tcp-server-client-implementation-in-c/
+// Beej's Guide to Network Programming by Brian Hall: https://beej.us/guide/bgnet/html/#poll
 void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
     
     // convert port to const char* for getaddrinfo()

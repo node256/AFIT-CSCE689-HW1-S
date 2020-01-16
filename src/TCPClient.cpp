@@ -30,7 +30,7 @@ TCPClient::~TCPClient() {
  *
  *    Throws: socket_error exception if failed. socket_error is a child class of runtime_error
  **********************************************************************************************/
-
+// Brian "Beej" Hall https://beej.us/guide/bgnet/html/#connect
 void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
 
     // convert port to const char* for getaddrinfo()
