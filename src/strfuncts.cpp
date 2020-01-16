@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <termios.h>
+#include <sstream>
 #include "strfuncts.h"
 
 void clrNewlines(std::string &str) {
@@ -40,5 +41,13 @@ int hideInput(int fd, bool hide) {
    if (tcsetattr(fd, TCSAFLUSH, &tattr) != 0)
       return -1; 
    return 0;
+}
+
+const char * sitcchp( short int num){
+    std::stringstream ss;
+    ss << num;
+    std::string convert = ss.str();
+    const char *string = convert.c_str();
+    return string;
 }
 

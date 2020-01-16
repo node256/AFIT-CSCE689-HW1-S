@@ -1,8 +1,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sstream.h>
+#include <netdb.h>
 #include <string.h>
+#include <unistd.h>
 #include "TCPClient.h"
+#include "strfuncts.h"
 
 
 /**********************************************************************************************
@@ -30,12 +32,9 @@ TCPClient::~TCPClient() {
  **********************************************************************************************/
 
 void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
-    
+
     // convert port to const char* for getaddrinfo()
-    std::stringstream ss;
-    ss << port;
-    std::string convert = ss.str();
-    const char *PORT = convert.c_str();
+    const char *PORT = sitcchp(port);
 
     int rv;
     struct addrinfo hints, *res;
@@ -53,7 +52,7 @@ void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
 
     // make and verfy socket
     this->_clientSockFD = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sockfd == -1) { 
+    if (this->_clientSockFD == -1) { 
         perror("socket creation failed\n"); 
         exit(EXIT_FAILURE); 
     } 
@@ -64,7 +63,6 @@ void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
         closeConn();
         exit(EXIT_FAILURE);
     }
-
 }
 
 /**********************************************************************************************

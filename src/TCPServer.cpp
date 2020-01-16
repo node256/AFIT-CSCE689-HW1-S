@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <sstream>
 #include <sys/epoll.h>
+#include "strfuncts.h"
 
 TCPServer::TCPServer() {
     
@@ -33,10 +34,7 @@ TCPServer::~TCPServer() {
 void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
     
     // convert port to const char* for getaddrinfo()
-    std::stringstream ss;
-    ss << port;
-    std::string convert = ss.str();
-    const char *PORT = convert.c_str();
+    const char *PORT = sitcchp(port);
     
     int optYes = 1;
     int rv;
