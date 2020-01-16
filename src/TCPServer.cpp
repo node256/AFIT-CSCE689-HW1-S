@@ -34,7 +34,7 @@ TCPServer::~TCPServer() {
 void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
     
     // convert port to const char* for getaddrinfo()
-    const char *PORT = sitcchp(port);
+    const char *PORT = ustcchp(port);
     
     int optYes = 1;
     int rv;
@@ -52,7 +52,9 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
         exit(1);
     }
 
+    // create socket and attempt to bind
     for(p = ai; p != NULL; p = p->ai_next) {
+        // create socket
         this->_listSockFD = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (this->_listSockFD < 0) { 
             continue;
@@ -65,6 +67,7 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
         // Beej says it might eat cpu cycles
         fcntl(this->_listSockFD, F_SETFL, O_NONBLOCK);
 
+        // bind socket
         if (bind(this->_listSockFD, p->ai_addr, p->ai_addrlen) < 0) {
             close(this->_listSockFD);
             continue;
@@ -73,6 +76,7 @@ void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
         break;
     }
 
+    // exit if bind failed
     if (p == NULL){
         perror("bind failed\n");
         exit(EXIT_FAILURE);

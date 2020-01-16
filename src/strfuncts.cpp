@@ -43,7 +43,7 @@ int hideInput(int fd, bool hide) {
    return 0;
 }
 
-const char * sitcchp( short int num){
+const char * ustcchp( unsigned short int num){
     std::stringstream ss;
     ss << num;
     std::string convert = ss.str();

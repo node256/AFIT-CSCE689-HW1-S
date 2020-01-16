@@ -34,7 +34,7 @@ TCPClient::~TCPClient() {
 void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
 
     // convert port to const char* for getaddrinfo()
-    const char *PORT = sitcchp(port);
+    const char *PORT = ustcchp(port);
 
     int rv;
     struct addrinfo hints, *res;
