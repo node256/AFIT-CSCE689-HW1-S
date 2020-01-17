@@ -13,6 +13,7 @@
 #include <sys/epoll.h>
 #include <time.h>
 #include "strfuncts.h"
+#include "exceptions.h"
 
 TCPServer::TCPServer() {
     
@@ -34,58 +35,23 @@ TCPServer::~TCPServer() {
 // Beej's Guide to Network Programming by Brian Hall: https://beej.us/guide/bgnet/html/#poll
 void TCPServer::bindSvr(const char *ip_addr, short unsigned int port) {
     
-    // convert port to const char* for getaddrinfo()
-    const char *PORT = ustcchp(port);
-    
-    int optYes = 1;
-    int rv;
-    struct addrinfo hints, *ai, *p;
-
-    // Seting up server IP address
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;  
-    
-    // verify address/port
-    if ((rv = getaddrinfo(ip_addr, PORT, &hints, &ai)) != 0) {
-        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
-        exit(1);
+    // create listener socket and verify
+    this->_listSockFD = socket(AF_INET, SOCK_STREAM, 0);
+    if (this->_listSockFD < 0) { 
+       throw socket_error("Unable to create socket.");
     }
 
-    // create socket and attempt to bind
-    for(p = ai; p != NULL; p = p->ai_next) {
-        // create socket
-        this->_listSockFD = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (this->_listSockFD < 0) { 
-            continue;
-        }
-        
-        // prevent "address already in use" error message
-        setsockopt(this->_listSockFD, SOL_SOCKET, SO_REUSEADDR, &optYes, sizeof(int));
+    // set up IP address and port
+    struct sockaddr_in servAddr;
+    servAddr.sin_family = AF_INET;
+    servAddr.sin_port = htons(port);
+    inet_aton(ip_addr, &servAddr.sin_addr);
 
-        // set listener port to non-blocking
-        // Beej says it might eat cpu cycles
-        fcntl(this->_listSockFD, F_SETFL, O_NONBLOCK);
-
-        // bind socket
-        if (bind(this->_listSockFD, p->ai_addr, p->ai_addrlen) < 0) {
-            close(this->_listSockFD);
-            continue;
-        }
-
-        break;
+    // bind IP/port to socket file descriptor and verify
+    if (bind(this->_listSockFD, (struct sockaddr *) &servAddr, sizeof(servAddr)) < 0) {
+       close(this->_listSockFD);
+       throw socket_error("Unable to bind");
     }
-
-    // exit if bind failed
-    if (p == NULL){
-        perror("bind failed\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // Clear addr info
-    freeaddrinfo(ai);
-
 }
 
 /**********************************************************************************************
@@ -109,28 +75,26 @@ void TCPServer::listenSvr() {
     struct epoll_event ev, events[MAX_EVENTS];
     int connSockFD, nfds, epollfd;
 
+    int nBytes;
     char buffer[MAXBUF];
     char * msg;
 
     // start and verify listening on socket
     if (listen(this->_listSockFD, 10) < 0 ){
-        perror("listen failed\n");
-        exit(EXIT_FAILURE);
+        throw socket_error("Unable to listen");
     }
 
     // Set up epoll file desciptor
     epollfd = epoll_create1(0);
     if (epollfd == -1) {
-        perror("epoll_create1");
-        exit(EXIT_FAILURE);
+        throw socket_error("epoll create failed");
     }
 
     // Set up epoll control and add listening socket
-    ev.events = EPOLLIN;
+    ev.events = EPOLLIN | EPOLLET;
     ev.data.fd = this->_listSockFD;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, this->_listSockFD, &ev) == -1) {
-        perror("epoll_ctl: this->_listSockFD");
-        exit(EXIT_FAILURE);
+        throw socket_error("listener add to epoll control failed");
     }
 
     // accepting connections and processing commands
@@ -138,8 +102,7 @@ void TCPServer::listenSvr() {
         // poll file descriptors for ready sockets
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
-            perror("epoll_wait");
-            exit(EXIT_FAILURE);
+            throw socket_error("poll wait fail");
         }
 
         // process events, accept connections, transfer data
@@ -148,23 +111,19 @@ void TCPServer::listenSvr() {
             if (events[n].data.fd == this->_listSockFD) {
                 connSockFD = accept(this->_listSockFD, (struct sockaddr *) &clientAddr, &addrLen);
                 if (connSockFD == -1) {
-                    perror("accept");
-                    exit(EXIT_FAILURE);
-                }
-                // set socket to non-blocking, suppoesedly eats CPU cycles
-                if (fcntl(connSockFD, F_SETFL, O_NONBLOCK) < 0){
-                    printf("Set conn non-blocking failed\n");
-                    exit(EXIT_FAILURE);
-                }
-                // add new connection to poll list
-                ev.events = EPOLLIN | EPOLLET;
-                ev.data.fd = connSockFD;
-                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD, &ev) == -1) {
-                    fprintf(stderr, "epoll set insertion error: fd=%d0", connSockFD);
-                    exit(EXIT_FAILURE);
+                    throw socket_error("Unable to accept");
                 }
 
-                send(ev.data.fd, this->_menu, strlen(this->_menu), 0);
+                // add new connection to poll list
+                ev.events = EPOLLIN;
+                ev.data.fd = connSockFD;
+                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD, &ev) == -1) {
+                    throw socket_error("connect add to epoll control failed");
+                }
+
+                if (send(ev.data.fd, this->_menu, strlen(this->_menu), 0) < 0){
+                    throw socket_error("init menu send failed");
+                }
 
             // process commands, send/recive data
             } else {
@@ -172,29 +131,28 @@ void TCPServer::listenSvr() {
                 bzero(buffer, MAXBUF);
 
                 // read from client to buffer
-                int nbytes = recv(events[n].data.fd, buffer, sizeof(buffer), 0);
+                nBytes = recv(events[n].data.fd, buffer, sizeof(buffer), 0);
 
                 // check for closed or errored connections
-                int sender_fd = events[n].data.fd;
-                if (nbytes <= 0) {
-                    if (nbytes == 0) {
+                if (nBytes <= 0) {
+                    if (nBytes == 0) {
                         // Connection closed
-                        printf("pollserver: socket %d hung up\n", sender_fd);
+                        printf("pollserver: socket %d hung up\n", events[n].data.fd);
+                        epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
                     } else {
-                        perror("recv");
+                        throw socket_error("connection error");
                     }
-
-                    // close fd if errored or closed
-                    close(events[n].data.fd);
-                    epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
                 } 
                 else {
                     // process client input and send response
-                    if ( strncmp(buffer,"hello", 5) == 0 ){
+                    if ( strncmp(buffer,"exit", 4) == 0 ){
+                        snprintf(buffer, MAXBUF, "Closing connection\n");
+                    }
+                    else if ( strncmp(buffer,"hello", 5) == 0 ){
                         snprintf(buffer, MAXBUF, "Hello Dave\n");
                     }
                     else if ( strncmp(buffer,"1", 1) == 0 ){
-                        snprintf(buffer, MAXBUF, "%d active connections\n", nfds);
+                        snprintf(buffer, MAXBUF, "I don't know\n");
                     }
                     else if ( strncmp(buffer,"2", 1) == 0 ){
                         snprintf(buffer, MAXBUF, "Your server file desciptor is %d\n", events[n].data.fd);
@@ -212,9 +170,6 @@ void TCPServer::listenSvr() {
                     else if ( strncmp(buffer,"passwd", 6) == 0 ){
                         snprintf(buffer, MAXBUF, "Function not found\n");
                     }
-                    else if ( strncmp(buffer,"exit", 4) == 0){
-                        snprintf(buffer, MAXBUF, "exit");
-                    }
                     else if ( strncmp(buffer,"menu", 4) == 0 ){
                         snprintf( buffer, MAXBUF, "%s", this->_menu);
                     }
@@ -223,7 +178,7 @@ void TCPServer::listenSvr() {
                     }
 
                     // send reply to client
-                    if (send(events[n].data.fd, buffer, nbytes, 0) == -1) {
+                    if (send(events[n].data.fd, buffer, strlen(buffer), 0) == -1) {
                         perror("send");
                     }
                 }
@@ -241,5 +196,4 @@ void TCPServer::listenSvr() {
 
 void TCPServer::shutdown() {
     close(this->_listSockFD);
-
 }

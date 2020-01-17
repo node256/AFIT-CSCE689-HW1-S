@@ -11,8 +11,3 @@ void lower(std::string &str);
 
 // Turns off local echo from a user's terminal
 int hideInput(int fd, bool hide);
-
-// converts short int to const char * string
-const char * ustcchp(unsigned short num);
-
-

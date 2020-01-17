@@ -42,12 +42,3 @@ int hideInput(int fd, bool hide) {
       return -1; 
    return 0;
 }
-
-const char * ustcchp( unsigned short int num){
-    std::stringstream ss;
-    ss << num;
-    std::string convert = ss.str();
-    const char *string = convert.c_str();
-    return string;
-}
-

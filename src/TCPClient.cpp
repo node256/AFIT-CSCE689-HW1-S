@@ -1,11 +1,15 @@
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <sys/epoll.h>
 #include "TCPClient.h"
 #include "strfuncts.h"
+#include "exceptions.h"
 
 
 /**********************************************************************************************
@@ -31,40 +35,25 @@ TCPClient::~TCPClient() {
  *
  *    Throws: socket_error exception if failed. socket_error is a child class of runtime_error
  **********************************************************************************************/
-// Brian "Beej" Hall https://beej.us/guide/bgnet/html/#connect
 void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
 
-    // convert port to const char* for getaddrinfo()
-    const char *PORT = ustcchp(port);
-
-    int rv;
-    struct addrinfo hints, *res;
-
-    // set up socket address/port
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    // verify address/port
-    if ((rv = getaddrinfo(ip_addr, PORT, &hints, &res)) != 0){
-        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
-        exit(1);
+    // create connection socket and verify
+    this->_clientSockFD = socket(AF_INET, SOCK_STREAM, 0);
+    if (this->_clientSockFD < 0) { 
+       throw socket_error("Unable to create socket.");
     }
 
-    // make and verfy socket
-    this->_clientSockFD = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (this->_clientSockFD == -1) { 
-        perror("socket creation failed\n"); 
-        exit(EXIT_FAILURE); 
-    } 
+    // set up IP address and port
+    struct sockaddr_in cliAddr;
+    cliAddr.sin_family = AF_INET;
+    cliAddr.sin_port = htons(port);
+    inet_aton(ip_addr, &cliAddr.sin_addr);
 
-    // appempt to connect and verify
-    if (connect(this->_clientSockFD, res->ai_addr, res->ai_addrlen) < 0 ){
-        perror("connect failed\n");
-        closeConn();
-        exit(EXIT_FAILURE);
+    // connect IP/port to socket file descriptor and verify
+    if (connect(this->_clientSockFD, (struct sockaddr *) &cliAddr, sizeof(cliAddr)) < 0) {
+       close(this->_clientSockFD);
+       throw socket_error("Unable to connect");
     }
-
 }
 
 /**********************************************************************************************
@@ -74,30 +63,83 @@ void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
  * 
  *    Throws: socket_error for recoverable errors, runtime_error for unrecoverable types
  **********************************************************************************************/
-
+// http://man7.org/linux/man-pages/man7/epoll.7.html
+// Beej's Guide to Network Programming by Brian hall: https://beej.us/guide/bgnet/html/#poll
 void TCPClient::handleConnection() {
-    char buff[socket_bufsize]; 
-    int n;
 
-    // request menu
-    bzero(this->_buff, socket_bufsize);
-    int nbytes = recv(this->_clientSockFD, this->_buff, socket_bufsize, 0);
-    sleep(1);
-    std::cout << this->_buff;
+    #define MAX_EVENTS 10
 
-    for (;;) { 
-        bzero(buff, sizeof(buff)); 
-        n = 0; 
-        while ((buff[n++] = getchar()) != '\n') ; 
-        write(this->_clientSockFD, buff, sizeof(buff)); 
-        bzero(buff, sizeof(buff)); 
-        read(this->_clientSockFD, buff, sizeof(buff)); 
-        if ((strncmp(buff, "exit", 4)) == 0) {  
-            break; 
-        } 
-        printf("%s", buff); 
-        
-    } 
+    struct sockaddr_storage clientAddr;
+    socklen_t addrLen;
+
+    struct epoll_event ev, events[MAX_EVENTS];
+    int nfds, epollfd;
+
+    int nBytes;
+    char inBuff[stdin_bufsize];
+    char sockBuff[256];
+
+    // Set up epoll file desciptor
+    epollfd = epoll_create1(0);
+    if (epollfd == -1) {
+        throw socket_error("epoll create failed");
+    }
+
+    // Set up epoll control, add stdin and socked FD
+    
+    //  add STDIN to ep control
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = STDIN_FILENO;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &ev) == -1) {
+        throw socket_error("STDIN add to epoll control failed");
+    }
+
+    // add cli socket to ep control
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.fd = this->_clientSockFD;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, this->_clientSockFD, &ev) == -1) {
+        throw socket_error("clientSock add to epoll control failed");
+    }
+
+    for (;;){
+        // poll file descriptors for ready sockets
+        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        if (nfds == -1) {
+            throw socket_error("poll wait fail");
+        }
+
+        // process events, transfer data
+        for (int n = 0; n < nfds; ++n) {
+            // capture and send client terminal input
+            if (events[n].data.fd == STDIN_FILENO) {
+                // clear buffer
+                bzero(inBuff, stdin_bufsize);
+                // capture stdin to buffer
+                nBytes = read(STDIN_FILENO, inBuff, stdin_bufsize);
+                // add check for \n
+
+                if (send(_clientSockFD, inBuff, stdin_bufsize, 0) == -1) {
+                    perror("send");
+                }
+            }
+            // receive data from server
+            if (events[n].data.fd == _clientSockFD ) {
+                // clear buffer
+                bzero(sockBuff, 256);
+                nBytes = recv(_clientSockFD, sockBuff, 256, 0);
+
+                // check for closed or errored connections
+                if (nBytes < 0) {
+                    throw socket_error("recieve error");
+                }
+                else {
+                    // print data from server
+                    std::cout << sockBuff;
+                }
+            }
+        }
+    }
+    close(epollfd);
 }
 
 /**********************************************************************************************
