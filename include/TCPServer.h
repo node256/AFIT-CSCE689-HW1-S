@@ -15,7 +15,7 @@ public:
 
 private:
    int _listSockFD;
-   const char * _menu = "Enter one of the following commands\nhello\n1 #of active server connections IP\n2 Your file descriptor\n3 What time is it?\n4 Suprise\n5 How long did this take to program?\npasswd\nexit\nmenu";
+   const char * _menu = "Enter one of the following commands\n";//hello\n1 #of active server connections IP\n2 Your file descriptor\n3 What time is it?\n4 Suprise\n5 How long did this take to program?\npasswd\nexit\nmenu";
 
 };
 

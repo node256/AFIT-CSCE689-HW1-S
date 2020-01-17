@@ -87,17 +87,16 @@ void TCPClient::handleConnection() {
 
     for (;;) { 
         bzero(buff, sizeof(buff)); 
-        //printf("Enter the string : "); 
         n = 0; 
         while ((buff[n++] = getchar()) != '\n') ; 
         write(this->_clientSockFD, buff, sizeof(buff)); 
         bzero(buff, sizeof(buff)); 
         read(this->_clientSockFD, buff, sizeof(buff)); 
-        printf("From Server : %s\n", buff); 
-        if ((strncmp(buff, "exit", 4)) == 0) { 
-            printf("Client Exit...\n"); 
+        if ((strncmp(buff, "exit", 4)) == 0) {  
             break; 
         } 
+        printf("%s", buff); 
+        
     } 
 }
 

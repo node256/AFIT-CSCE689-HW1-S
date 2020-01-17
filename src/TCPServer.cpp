@@ -186,41 +186,41 @@ void TCPServer::listenSvr() {
 
                     // close fd if errored or closed
                     close(events[n].data.fd);
-
+                    epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
                 } 
                 else {
                     // process client input and send response
-                    /*if ( strncmp(buffer,"hello", 5) ){
+                    if ( strncmp(buffer,"hello", 5) == 0 ){
                         snprintf(buffer, MAXBUF, "Hello Dave\n");
                     }
-                    else if ( strncmp(buffer,"1", 1) ){
-                        snprintf(buffer, MAXBUF, "%d\n active connections\n", nfds);
+                    else if ( strncmp(buffer,"1", 1) == 0 ){
+                        snprintf(buffer, MAXBUF, "%d active connections\n", nfds);
                     }
-                    else if ( strncmp(buffer,"2", 1) ){
+                    else if ( strncmp(buffer,"2", 1) == 0 ){
                         snprintf(buffer, MAXBUF, "Your server file desciptor is %d\n", events[n].data.fd);
                     }
-                    else if ( strncmp(buffer,"3", 1) ){
+                    else if ( strncmp(buffer,"3", 1) == 0 ){
                         time_t sysTime = time(NULL);
-                        snprintf(buffer, MAXBUF, "The time is %s\n", ctime(&sysTime));
+                        snprintf(buffer, MAXBUF, "The time is %s", ctime(&sysTime));
                     }
-                    else if ( strncmp(buffer,"4", 1) ){
+                    else if ( strncmp(buffer,"4", 1) == 0 ){
                         snprintf(buffer, MAXBUF, "Happy Birthday!!!!!\n");
                     }
-                    else if ( strncmp(buffer,"5", 1) ){
+                    else if ( strncmp(buffer,"5", 1) == 0){
                         snprintf(buffer, MAXBUF, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n");
                     }
-                    else if ( strncmp(buffer,"passwd", 6) ){
+                    else if ( strncmp(buffer,"passwd", 6) == 0 ){
                         snprintf(buffer, MAXBUF, "Function not found\n");
                     }
-                    else if ( strncmp(buffer,"exit", 4) ){
+                    else if ( strncmp(buffer,"exit", 4) == 0){
                         snprintf(buffer, MAXBUF, "exit");
                     }
-                    else if ( strncmp(buffer,"menu", 4) ){
+                    else if ( strncmp(buffer,"menu", 4) == 0 ){
                         snprintf( buffer, MAXBUF, "%s", this->_menu);
                     }
                     else {
                         snprintf( buffer, MAXBUF, "invalid command\n%s", this->_menu);
-                    }*/
+                    }
 
                     // send reply to client
                     if (send(events[n].data.fd, buffer, nbytes, 0) == -1) {
