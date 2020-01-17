@@ -79,6 +79,8 @@ void TCPServer::listenSvr() {
     char buffer[MAXBUF];
     char * msg;
 
+    bool exit;
+
     // start and verify listening on socket
     if (listen(this->_listSockFD, 10) < 0 ){
         throw socket_error("Unable to listen");
@@ -115,7 +117,7 @@ void TCPServer::listenSvr() {
                 }
 
                 // add new connection to poll list
-                ev.events = EPOLLIN;
+                ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connSockFD;
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connSockFD, &ev) == -1) {
                     throw socket_error("connect add to epoll control failed");
@@ -138,15 +140,20 @@ void TCPServer::listenSvr() {
                     if (nBytes == 0) {
                         // Connection closed
                         printf("pollserver: socket %d hung up\n", events[n].data.fd);
-                        epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
-                    } else {
+                    }
+                    else { 
                         throw socket_error("connection error");
                     }
+
+                    // close and cleanup socket
+                    close(events[n].data.fd);
+                    epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
                 } 
                 else {
                     // process client input and send response
                     if ( strncmp(buffer,"exit", 4) == 0 ){
                         snprintf(buffer, MAXBUF, "Closing connection\n");
+                        exit = true;
                     }
                     else if ( strncmp(buffer,"hello", 5) == 0 ){
                         snprintf(buffer, MAXBUF, "Hello Dave\n");
@@ -180,6 +187,13 @@ void TCPServer::listenSvr() {
                     // send reply to client
                     if (send(events[n].data.fd, buffer, strlen(buffer), 0) == -1) {
                         perror("send");
+                    }
+                    if (exit){
+                        // close and cleanup socket at client request
+                        printf("pollserver: socket %d hung up\n", events[n].data.fd);
+                        close(events[n].data.fd);
+                        epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
+                        exit = false;
                     }
                 }
             }

@@ -69,6 +69,8 @@ void TCPClient::handleConnection() {
 
     #define MAX_EVENTS 10
 
+    bool exit= false;
+
     struct sockaddr_storage clientAddr;
     socklen_t addrLen;
 
@@ -101,7 +103,7 @@ void TCPClient::handleConnection() {
         throw socket_error("clientSock add to epoll control failed");
     }
 
-    for (;;){
+    while (!exit){
         // poll file descriptors for ready sockets
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
@@ -129,8 +131,20 @@ void TCPClient::handleConnection() {
                 nBytes = recv(_clientSockFD, sockBuff, 256, 0);
 
                 // check for closed or errored connections
-                if (nBytes < 0) {
-                    throw socket_error("recieve error");
+                if (nBytes <= 0){
+                    if (nBytes == 0) {
+                        // Connection closed
+                        printf("pollserver: socket %d hung up\n", events[n].data.fd);
+                        exit = true;
+                    }
+                    else {
+                        throw socket_error("connection error");
+                    }
+
+                    // cleanup
+                    close(_clientSockFD);
+                    epoll_ctl(epollfd, EPOLL_CTL_DEL, events[n].data.fd, &ev);
+
                 }
                 else {
                     // print data from server
