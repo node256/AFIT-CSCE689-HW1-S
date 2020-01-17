@@ -3,6 +3,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <iostream>
 #include "TCPClient.h"
 #include "strfuncts.h"
 
@@ -63,6 +64,7 @@ void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
         closeConn();
         exit(EXIT_FAILURE);
     }
+
 }
 
 /**********************************************************************************************
@@ -74,7 +76,29 @@ void TCPClient::connectTo(const char *ip_addr, unsigned short port) {
  **********************************************************************************************/
 
 void TCPClient::handleConnection() {
-   
+    char buff[socket_bufsize]; 
+    int n;
+
+    // request menu
+    bzero(this->_buff, socket_bufsize);
+    int nbytes = recv(this->_clientSockFD, this->_buff, socket_bufsize, 0);
+    sleep(1);
+    std::cout << this->_buff;
+
+    for (;;) { 
+        bzero(buff, sizeof(buff)); 
+        //printf("Enter the string : "); 
+        n = 0; 
+        while ((buff[n++] = getchar()) != '\n') ; 
+        write(this->_clientSockFD, buff, sizeof(buff)); 
+        bzero(buff, sizeof(buff)); 
+        read(this->_clientSockFD, buff, sizeof(buff)); 
+        printf("From Server : %s\n", buff); 
+        if ((strncmp(buff, "exit", 4)) == 0) { 
+            printf("Client Exit...\n"); 
+            break; 
+        } 
+    } 
 }
 
 /**********************************************************************************************

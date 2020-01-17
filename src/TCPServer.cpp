@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <sstream>
 #include <sys/epoll.h>
+#include <time.h>
 #include "strfuncts.h"
 
 TCPServer::TCPServer() {
@@ -109,6 +110,7 @@ void TCPServer::listenSvr() {
     int connSockFD, nfds, epollfd;
 
     char buffer[MAXBUF];
+    char * msg;
 
     // start and verify listening on socket
     if (listen(this->_listSockFD, 10) < 0 ){
@@ -161,11 +163,70 @@ void TCPServer::listenSvr() {
                     fprintf(stderr, "epoll set insertion error: fd=%d0", connSockFD);
                     exit(EXIT_FAILURE);
                 }
+
+                send(ev.data.fd, this->_menu, strlen(this->_menu), 0);
+
             // process commands, send/recive data
             } else {
-                memset(buffer,0,MAXBUF);
-                read(events[n].data.fd, buffer, MAXBUF);
-                write(events[n].data.fd, buffer, strlen(buffer));
+                // zeroize buffer
+                bzero(buffer, MAXBUF);
+
+                // read from client to buffer
+                int nbytes = recv(events[n].data.fd, buffer, sizeof(buffer), 0);
+
+                // check for closed or errored connections
+                int sender_fd = events[n].data.fd;
+                if (nbytes <= 0) {
+                    if (nbytes == 0) {
+                        // Connection closed
+                        printf("pollserver: socket %d hung up\n", sender_fd);
+                    } else {
+                        perror("recv");
+                    }
+
+                    // close fd if errored or closed
+                    close(events[n].data.fd);
+
+                } 
+                else {
+                    // process client input and send response
+                    /*if ( strncmp(buffer,"hello", 5) ){
+                        snprintf(buffer, MAXBUF, "Hello Dave\n");
+                    }
+                    else if ( strncmp(buffer,"1", 1) ){
+                        snprintf(buffer, MAXBUF, "%d\n active connections\n", nfds);
+                    }
+                    else if ( strncmp(buffer,"2", 1) ){
+                        snprintf(buffer, MAXBUF, "Your server file desciptor is %d\n", events[n].data.fd);
+                    }
+                    else if ( strncmp(buffer,"3", 1) ){
+                        time_t sysTime = time(NULL);
+                        snprintf(buffer, MAXBUF, "The time is %s\n", ctime(&sysTime));
+                    }
+                    else if ( strncmp(buffer,"4", 1) ){
+                        snprintf(buffer, MAXBUF, "Happy Birthday!!!!!\n");
+                    }
+                    else if ( strncmp(buffer,"5", 1) ){
+                        snprintf(buffer, MAXBUF, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n");
+                    }
+                    else if ( strncmp(buffer,"passwd", 6) ){
+                        snprintf(buffer, MAXBUF, "Function not found\n");
+                    }
+                    else if ( strncmp(buffer,"exit", 4) ){
+                        snprintf(buffer, MAXBUF, "exit");
+                    }
+                    else if ( strncmp(buffer,"menu", 4) ){
+                        snprintf( buffer, MAXBUF, "%s", this->_menu);
+                    }
+                    else {
+                        snprintf( buffer, MAXBUF, "invalid command\n%s", this->_menu);
+                    }*/
+
+                    // send reply to client
+                    if (send(events[n].data.fd, buffer, nbytes, 0) == -1) {
+                        perror("send");
+                    }
+                }
             }
         }
     }
