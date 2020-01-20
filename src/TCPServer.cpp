@@ -14,6 +14,7 @@
 #include <time.h>
 #include "strfuncts.h"
 #include "exceptions.h"
+#include "TCPConn.h"
 
 TCPServer::TCPServer() {
     
@@ -75,9 +76,11 @@ void TCPServer::listenSvr() {
     struct epoll_event ev, events[MAX_EVENTS];
     int connSockFD, nfds, epollfd;
 
+    TCPConn tcpConn;
+
     int nBytes;
     char buffer[MAXBUF];
-    char * msg;
+
 
     bool exit;
 
@@ -123,9 +126,13 @@ void TCPServer::listenSvr() {
                     throw socket_error("connect add to epoll control failed");
                 }
 
-                if (send(ev.data.fd, this->_menu, strlen(this->_menu), 0) < 0){
+                if ((tcpConn.sendString(this->_menu, connSockFD)) < 0){
                     throw socket_error("init menu send failed");
                 }
+                /*if (send(ev.data.fd, this->_menu, strlen(this->_menu), 0) < 0){
+                    throw socket_error("init menu send failed");
+                    
+                }*/
 
             // process commands, send/recive data
             } else {
@@ -186,7 +193,7 @@ void TCPServer::listenSvr() {
 
                     // send reply to client
                     if (send(events[n].data.fd, buffer, strlen(buffer), 0) == -1) {
-                        perror("send");
+                        throw socket_error("send response");
                     }
                     if (exit){
                         // close and cleanup socket at client request

@@ -21,7 +21,6 @@ public:
 
 private:
    int _clientSockFD;
-   char _buff[socket_bufsize];
 };
 
 
